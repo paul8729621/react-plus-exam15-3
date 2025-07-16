@@ -1,92 +1,66 @@
-import React, { useState } from 'react';
-import BoardDetailModal from './BoardDetailModal';
-import { useBoardStore } from '../store';
-import BoardConfirmModal from './BoardConfirmModal';
-import BoardEditModal from './BoardEditModal';
+import React, { useMemo } from "react";
+import { useDroppable } from "@dnd-kit/core";                   // ⬅️ NEW
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useBoardStore } from "../store";
+import { shallow } from "zustand/shallow";
 
-const typeToKorean = (type) => {
-  switch (type) {
-    case 'todo':
-      return '할 일';
-    case 'inprogress':
-      return '진행 중';
-    case 'done':
-      return '완료';
-    default:
-      return type;
-  }
-};
+function Card({ card }) {
+  const {
+    setNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: card.id });
 
-const Boards = ({ type }) => {
-  const { data } = useBoardStore();
-  const filteredData = data.filter((item) => item.type === type);
-  const [item, setItem] = useState(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [confirmIsOpen, setConfirmIsOpen] = useState(false);
-  const [editIsOpen, setEditIsOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
-
-  const handleModalOpen = (item) => {
-    setItem(item);
-    setIsOpen(true);
-  };
-  const handleModalClose = () => {
-    setItem(null);
-    setIsOpen(false);
-  };
-
-  const handleConfirmModalOpen = (id) => {
-    setSelectedId(id);
-    handleModalClose();
-    setConfirmIsOpen(true);
-  };
-  const handleConfirmModalClose = () => {
-    setConfirmIsOpen(false);
-    setSelectedId(null);
-  };
-
-  const handleEditModalOpen = () => {
-    setEditIsOpen(true);
-    setIsOpen(false);
-  };
-  const handleEditModalClose = () => {
-    setEditIsOpen(false);
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
   };
 
   return (
-    <div className="w-full flex flex-col">
-      <div className="w-full h-[60px] bg-stone-200 rounded-sm flex items-center justify-center">
-        <p className="text-lg font-semibold">{typeToKorean(type)}</p>
-      </div>
-      <div className="flex flex-col gap-2 p-4">
-        {filteredData.map((item) => (
-          <div
-            onClick={() => handleModalOpen(item)}
-            key={item.id}
-            className="bg-white hover:bg-stone-100 shadow-md rounded-md p-4 cursor-pointer"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">{item.title}</h3>
-              {item.type === 'todo' && <div className="animate-pulse w-2 h-2 rounded-full bg-green-500"></div>}
-              {item.type === 'inprogress' && <div className="animate-pulse w-2 h-2 rounded-full bg-amber-500"></div>}
-              {item.type === 'done' && <div className="animate-pulse w-2 h-2 rounded-full bg-red-500"></div>}
-            </div>
-            <p className="text-sm text-gray-500">{item.created_at}</p>
-          </div>
-        ))}
-      </div>
-      {isOpen && (
-        <BoardDetailModal
-          onClose={handleModalClose}
-          onConfirm={handleConfirmModalOpen}
-          onEdit={handleEditModalOpen}
-          item={item}
-        />
-      )}
-      {confirmIsOpen && <BoardConfirmModal onClose={handleConfirmModalClose} id={selectedId} />}
-      {editIsOpen && <BoardEditModal onClose={handleEditModalClose} item={item} />}
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="bg-white rounded-md p-3 mb-2 shadow cursor-grab select-none"
+    >
+      <h3 className="font-semibold">{card.title}</h3>
+      {card.description && <p className="text-sm mt-1">{card.description}</p>}
     </div>
   );
-};
+}
 
-export default Boards;
+export default function Boards({ type }) {
+  const boardData = useBoardStore((s) => s.data, shallow);
+  const cards = useMemo(() => boardData.filter((b) => b.type === type), [boardData, type]);
+  const ids   = useMemo(() => cards.map((c) => c.id), [cards]);
+
+  const { setNodeRef, isOver } = useDroppable({ id: type });
+
+  return (
+    <section
+      ref={setNodeRef}
+      className="flex flex-col bg-slate-100 rounded-lg p-4 min-h-[200px]" // min‑height로 빈 컬럼도 영역 확보
+      style={{ backgroundColor: isOver ? "#e0e7ff" : undefined }}        // 드롭 프리뷰
+    >
+      <h2 className="text-center font-bold capitalize mb-3">
+        {type === "todo" ? "To Do" : type === "inprogress" ? "In Progress" : "Done"}
+      </h2>
+
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {cards.map((card) => (
+          <Card key={card.id} card={card} />
+        ))}
+      </SortableContext>
+    </section>
+  );
+}
